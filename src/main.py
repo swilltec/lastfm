@@ -21,19 +21,75 @@ class MenuOption(Enum):
 
 
 def get_graph_info(G: nx.Graph):
-    """Get and display basic information about the graph."""
+    """Calculate and print various metrics for the graph."""
+
+    # Basic metrics
     num_nodes = G.number_of_nodes()
     num_edges = G.number_of_edges()
-    density = nx.density(G)
-    avg_degree = sum(dict(G.degree()).values()) / num_nodes
     is_connected = nx.is_connected(G)
+    connected_components = nx.number_connected_components(G)
 
-    print("\nGraph Information:")
-    print(f"Number of nodes: {num_nodes}")
-    print(f"Number of edges: {num_edges}")
-    print(f"Graph density: {density:.4f}")
-    print(f"Average node degree: {avg_degree:.2f}")
-    print(f"Is the graph connected? {'Yes' if is_connected else 'No'}")
+    # Degree metrics
+    avg_degree = sum(dict(G.degree()).values()) / num_nodes if num_nodes > 0 else 0
+
+    # Cycle counts
+    triangle_count = (
+        sum(nx.triangles(G).values()) // 3
+    )  # Each triangle is counted three times
+    four_cycle_count = sum(1 for cycle in nx.cycle_basis(G) if len(cycle) == 4)
+    cycles = nx.cycle_basis(G)
+
+    # Longest cycle
+    longest_cycle = max(cycles, key=len) if cycles else None
+    longest_cycle_length = len(longest_cycle) if longest_cycle else 0
+
+    # Average shortest path length
+    avg_shortest_path_length = (
+        nx.average_shortest_path_length(G) if is_connected else -1
+    )
+
+    # Diameter (max shortest path length)
+    diameter = nx.diameter(G) if is_connected else -1
+
+    # BFS Tree Depth: maximum distance from a node to all others
+    bfs_tree_depth = (
+        max(
+            len(path)
+            for node in G
+            for path in nx.all_shortest_paths(G, source=node, target=list(G.nodes())[0])
+        )
+        - 1
+        if num_nodes > 1
+        else 0
+    )
+
+    # DFS Tree Depth: maximum depth in the DFS tree
+    dfs_tree = nx.dfs_tree(
+        G, source=list(G.nodes())[0]
+    )  # Get the DFS tree starting from an arbitrary node
+    dfs_tree_depth = max(dict(dfs_tree.degree()).values()) - 1 if num_nodes > 0 else 0
+
+    # Print the metrics
+    print("\nGraph Metrics:")
+    print(f"Total Nodes: {num_nodes}")
+    print(f"Total Edges: {num_edges}")
+    print(f"Connected Components: {connected_components}")
+    print(f"Average Degree: {avg_degree:.2f}")
+    print(f"Triangle Count: {triangle_count}")
+    print(f"4-Cycle Count: {four_cycle_count}")
+    print(f"Longest Cycle Length: {longest_cycle_length}")
+    print(
+        f"Average Shortest Path Length: {avg_shortest_path_length:.2f}"
+        if is_connected
+        else "Average Shortest Path Length: N/A (disconnected)"
+    )
+    print(
+        f"Max Shortest Path Length (Diameter): {diameter}"
+        if is_connected
+        else "Max Shortest Path Length (Diameter): N/A (disconnected)"
+    )
+    print(f"BFS Tree Depth (from sample node): {bfs_tree_depth}")
+    print(f"DFS Tree Depth (from same node): {dfs_tree_depth}")
 
 
 def load_graph_with_pandas(filepath: str) -> nx.Graph:
@@ -74,19 +130,29 @@ def visualize_graph(G: nx.Graph):
 
     # Plot the subgraph
     plt.figure(figsize=(10, 8))
-    nx.draw(subgraph, with_labels=True, node_size=50, font_size=8)
+    nx.draw(subgraph, with_labels=False, node_size=50, font_size=8)
     plt.title(f"Graph Visualization (Sample of {sample_size} nodes)")
     plt.show()
 
 
 def detect_cycles(G: nx.Graph):
-    """Detect all simple cycles in the graph."""
-    cycles = list(nx.cycle_basis(G))
-    print(f"Found {len(cycles)} cycles.")
-    for i, cycle in enumerate(cycles, 1):
-        print(f"Cycle {i}: {cycle}")
+    """Detect and categorize cycles in the graph, using triangles() for triangles and cycle_basis() for others."""
 
-    return cycles
+    # Detect triangles using the triangles() function
+    triangle_count = sum(1 for v in G.nodes() if nx.triangles(G, v) > 0)
+    print(f"Triangles (3-cycles): {triangle_count}")
+
+    # Detect all cycles using cycle_basis (for lengths 4 and greater)
+    cycles = nx.cycle_basis(G)
+    total_cycles = len(cycles)
+    print(f"Total cycles found: {total_cycles}")
+
+    # Count quadrilaterals (4-cycles) and longer cycles (> 4 nodes)
+    quadrilateral_count = sum(1 for cycle in cycles if len(cycle) == 4)
+    long_cycle_count = sum(1 for cycle in cycles if len(cycle) > 4)
+
+    print(f"Quadrilaterals (4-cycles): {quadrilateral_count}")
+    print(f"Longer cycles (>4 nodes): {long_cycle_count}")
 
 
 def is_connected(G: nx.Graph):
@@ -105,20 +171,24 @@ def path_exists(G: nx.Graph, node1: str, node2: str) -> bool:
 
 
 def run_bfs_dfs(G: nx.Graph, start_node: str):
-    """Run BFS and DFS from a starting node and visualize the trees."""
+    """Run BFS and DFS from a starting node and save each tree visualization as a separate image."""
+
     bfs_tree = nx.bfs_tree(G, start_node)
     dfs_tree = nx.dfs_tree(G, start_node)
 
-    plt.figure(figsize=(12, 6))
-
-    plt.subplot(1, 2, 1)
-    nx.draw(bfs_tree, with_labels=True, node_size=50, font_size=8)
+    # Draw and save BFS tree
+    plt.figure(figsize=(6, 6))
+    nx.draw(bfs_tree, with_labels=False, node_size=50, font_size=8)
     plt.title("BFS Tree")
+    plt.savefig("bfs_tree.png")
+    plt.close()
 
-    plt.subplot(1, 2, 2)
-    nx.draw(dfs_tree, with_labels=True, node_size=50, font_size=8)
+    # Draw and save DFS tree
+    plt.figure(figsize=(6, 6))
+    nx.draw(dfs_tree, with_labels=False, node_size=50, font_size=8)
     plt.title("DFS Tree")
-    plt.savefig("search.png")
+    plt.savefig("dfs_tree.png")
+    plt.close()
 
 
 def check_path(G: nx.Graph):
@@ -144,18 +214,39 @@ def exit_program():
 
 
 def draw_adjacency_matrix(G: nx.Graph):
-    """Draw the adjacency matrix of the graph as an image."""
-    adjacency_matrix = nx.to_numpy_array(G)
+    """
+    Draw the adjacency matrix of the graph as an image.
+
+    Parameters:
+    - G: networkx.Graph — the input graph.
+    - sample_size: int or None — number of nodes to sample; if None, use all nodes.
+    """
+    nodes = list(G.nodes)
+    total_nodes = len(nodes)
+
+    try:
+        sample_size = int(input(f"Enter sample size (max: {total_nodes}): "))
+        sample_size = min(total_nodes, sample_size)
+        sampled_nodes = nodes[:sample_size]
+        subgraph = G.subgraph(sampled_nodes)
+    except ValueError:
+        subgraph = G
+
+    adjacency_matrix = nx.to_numpy_array(subgraph)
+    labels = list(subgraph.nodes)
+
     plt.figure(figsize=(10, 8))
     plt.imshow(adjacency_matrix, cmap="hot", interpolation="nearest")
     plt.colorbar()
     plt.title("Adjacency Matrix of Graph")
     plt.xlabel("Nodes")
     plt.ylabel("Nodes")
-    plt.xticks(range(len(G.nodes)), G.nodes, rotation=90)
-    plt.yticks(range(len(G.nodes)), G.nodes)
+    plt.xticks(range(len(labels)), labels, rotation=90)
+    plt.yticks(range(len(labels)), labels)
     plt.grid(False)
+    plt.tight_layout()
     plt.savefig("adjacency_matrix.png")
+    plt.close()
 
 
 def main():
